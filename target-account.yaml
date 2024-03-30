@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Deploy the needed resources for creating an custom EventBridge Bus,
+  Event Bridge Rule for sending notifications, and an SNS Topic
+  used for notifications. (The SNS Topic could be replaced
+  with a Lambda Function)
+
+Parameters:
+  NotificationEmail:
+    Type: String
+    Description: Email Address to which the SNS Notifications will be sent (Required).
+    AllowedPattern: '[\w-\.]+@([\w-]+\.)+[\w-]{2,4}'
+
+  DisplayName:
+    Type: String
+    Description: >
+      Display Name for the SNS Topic (Optional).
+      Maximum 100 characters long, including hyphens (-), underscores (_), spaces, and tabs.
+    MaxLength: 100
+    Default: ''
+
+  TopicName:
+    Type: String
+    Description: >
+      Topic Name for the SNS Topic (Optional).
+      Maximum 264 characters long, uppercase and lowercase ASCII letters,
+      numbers, underscores, and hyphens
+    MaxLength: 264
+    Default: ''
+
+  EventBusName:
+    Type: String
+    Description: >
+      Name for the EventBus being created (Required).
+      Maximum 256 characters uppercase and lowercase ASCII letters, numbers, underscores,
+      period, and hyphens
+    MaxLength: 256
+    AllowedPattern: '[\.\-_A-Za-z0-9]+'
+
+  OrganizationId:
+    Type: String
+    Description: Organization Id (Required).
+    AllowedPattern: 'o-[a-z0-9]{10,32}'
+
+  RuleName:
+    Type: String
+    Description: >
+      EventBridge Rule Name (Optional).
+      Maximum 64 characters uppercase and lowercase ASCII letters, numbers, underscores,
+      period, and hyphens
+    MaxLength: 64
+    Default: ''
+
+Conditions:
+  HasDisplayName: !Not [!Equals [!Ref DisplayName, '']]
+  HasTopicName: !Not [!Equals [!Ref TopicName, '']]
+  HasRuleName: !Not [!Equals [!Ref RuleName, '']]
+
+Resources:
+  ###########################################################################
+  # SNS Topic and Policy which will be called by the Event Bridge Rule
+  ###########################################################################
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W47
+            reason: "KMS Master Key is optional and not being utilized"
+    Properties:
+      DisplayName: !If [HasDisplayName, !Ref DisplayName, !Ref "AWS::NoValue"]
+      TopicName: !If [HasTopicName, !Ref TopicName, !Ref "AWS::NoValue"]
+      Subscription:
+      - Endpoint: !Ref NotificationEmail
+        Protocol: email
+
+  SNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F18
+            reason: "Resource * is needed, restrictions to organization applied via condition"
+    Properties:
+      Topics:
+        - !Ref SNSTopic
+      PolicyDocument:
+        Id: PublishFromOrganizationAccounts
+        Version: '2012-10-17'
+        Statement:
+        - Sid: allow-publish-from-organization-accounts
+          Effect: Allow
+          Principal:
+            AWS: "*"
+          Action: sns:Publish
+          Resource: !Ref SNSTopic
+          Condition:
+            StringEquals:
+              'aws:PrincipalOrgID': !Ref OrganizationId
+        - Sid: allow-for-event-bridge-to-publish-to-topic
+          Effect: Allow
+          Principal:
+            Service: events.amazonaws.com
+          Action: sns:Publish
+          Resource: !Ref SNSTopic
+
+  ###########################################################################
+  # Custom Event Bus and Policy
+  ###########################################################################
+  EventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref EventBusName
+
+  EventBusPolicy:
+    Type: AWS::Events::EventBusPolicy
+    Properties:
+      Action: 'events:PutEvents'
+      Condition:
+        Key: "aws:PrincipalOrgID"
+        Type: "StringEquals"
+        Value: !Ref OrganizationId
+      EventBusName: !Ref EventBus
+      Principal: '*'
+      StatementId: AllowPutEventsFromOrganizationAccounts
+
+  ###########################################################################
+  # Event Bridge Rule
+  ###########################################################################
+  EventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggered on S3 Object Creation
+      EventBusName: !Ref EventBus
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - 'Object Created'
+      Name: !If [HasRuleName, !Ref RuleName, !Ref "AWS::NoValue"]
+      State: ENABLED
+      Targets:
+        - Arn: !Ref SNSTopic
+          Id: SnsEventBusNotification
+
+Outputs:
+  SNSTopic:
+    Description: SNS Topic
+    Value: !Ref SNSTopic
+
+  SNSTopicName:
+    Description: SNS Topic Name
+    Value: !GetAtt SNSTopic.TopicName
+
+  EventBus:
+    Description: Event Bus Name
+    Value: !Ref EventBus
+
+  EventBusArn:
+    Description: Event Bus Name ARN
+    Value: !GetAtt EventBus.Arn

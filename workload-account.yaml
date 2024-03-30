@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Create an EventBridge Rule on the default bus in the workload accounts
+  to forward S3 Object Creations to a centralized EventBridge.
+
+Parameters:
+  TargetEventBus:
+    Type: String
+    Description: >
+      ARN of the target EventBus in the Shared Services (target) Account.
+
+  RuleName:
+    Type: String
+    Description: >
+      EventBridge Rule Name (Optional).
+      Maximum 64 characters uppercase and lowercase ASCII letters,
+      numbers, underscores, period, and hyphens
+    MaxLength: 64
+    Default: ''
+
+  TargetAccountId:
+    Type: String
+    Description: >
+      AWS AccountID of the target account with the cross account centralized event bus.
+
+Conditions:
+  HasRuleName: !Not [!Equals [!Ref RuleName, '']]
+
+Resources:
+
+  ForwardingEventBusPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - events:PutEvents
+            Resource:
+              - !Sub arn:${AWS::Partition}:events:${AWS::Region}:${TargetAccountId}:event-bus/${TargetEventBus}
+            Sid: InvokeEventBusInSharedServices
+
+  ForwardingEventBusRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Ref ForwardingEventBusPolicy
+
+  ForwardingRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggered on S3 Object Creation
+      EventBusName: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - 'Object Created'
+      Name: !If [HasRuleName, !Ref RuleName, !Ref "AWS::NoValue"]
+      State: ENABLED
+      Targets:
+        - Arn: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${TargetAccountId}:event-bus/${TargetEventBus}
+          Id: ForwardToCentralBus
+          RoleArn: !GetAtt ForwardingEventBusRole.Arn

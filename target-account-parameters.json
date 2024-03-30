@@ -1,0 +1,27 @@
+[
+    {
+        "ParameterKey": "NotificationEmail",
+        "ParameterValue": ""
+    },
+    {
+        "ParameterKey": "OrganizationId",
+        "ParameterValue": ""
+    },
+    {
+        "ParameterKey": "TopicName",
+        "ParameterValue": "CrossAccountNotifications"
+    },
+    {
+        "ParameterKey": "DisplayName",
+        "ParameterValue": "Cross Account Notifications"
+    },
+    {
+        "ParameterKey": "EventBusName",
+        "ParameterValue": "CrossAccountBus"
+    },
+
+    {
+        "ParameterKey": "RuleName",
+        "ParameterValue": "CrossAccountNotifications"
+    }
+]

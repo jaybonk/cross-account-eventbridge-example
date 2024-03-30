@@ -1,0 +1,14 @@
+[
+    {
+        "ParameterKey": "TargetAccountId",
+        "ParameterValue": "999999999999"
+    },
+    {
+        "ParameterKey": "TargetEventBus",
+        "ParameterValue": "CrossAccountBus"
+    },
+    {
+        "ParameterKey": "RuleName",
+        "ParameterValue": "CrossAccountNotifications"
+    }
+]
