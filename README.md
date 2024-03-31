@@ -46,4 +46,4 @@ aws cloudformation deploy --template-file ./workload-account.yaml --stack-name c
 2. The creation of the object triggers an EventBridge Event on the default EventBus in the account
 3. The EventBridge rule in the workload account creates an event that is sent to the custom event bus in the target account
 4. An EventBridge Rule in the target account pushes the received information to an SNS Topic
-5 A generated SNS Email is sent to all subscribers to the Topic
+5. A generated SNS Email is sent to all subscribers to the Topic
